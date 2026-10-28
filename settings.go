@@ -249,10 +249,7 @@ var licensePattern = regexp.MustCompile(`^[A-Za-z0-9]{8}-[A-Za-z0-9]{8}-[A-Za-z0
 // endpoints a scan keeps, the account's mode). The panel checked the inbound when it was saved.
 func (s settings) withInbound(in warpInbound) settings {
 	out := s
-	name := strings.TrimSpace(in.S.Name)
-	if name == "" {
-		name = strings.TrimSpace(in.Remark)
-	}
+	name := strings.TrimSpace(in.Remark)
 	if name != "" && utf8.RuneCountInString(name) <= 60 && !strings.ContainsAny(name, "\r\n\x00") {
 		out.Name = name
 	}

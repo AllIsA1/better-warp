@@ -1,7 +1,7 @@
 {
   "id": "better-warp",
   "name": "Better WARP",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "apiVersion": "1",
   "description": "Cloudflare WARP over AmneziaWG as a protocol of the subscription: add an inbound of the WARP protocol (panel build with it) and attach clients, and each gets WARP nodes in the same four forms as an AmneziaWG node (vpn://, amneziawg://, the older amneziawg:// link, .conf), with their own WARP device, a WARP+ license, and a check and an endpoint scanner (in Better Cores) to find the quickest endpoints. Without a WARP inbound it works from its own page.",
   "author": "AllIsA1",

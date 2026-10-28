@@ -55,7 +55,7 @@ func TestAnInboundDecidesWhoGetsWarpAndWithWhatSettings(t *testing.T) {
 func TestEachWarpInboundGivesItsOwnNodes(t *testing.T) {
 	r, w := inboundRig(t, `{"endpoints":["162.159.192.1:2408"]}`)
 	r.panel.set(clientOn("alice", "sub1", true, 5, 6))
-	r.panel.setInbounds(warpIn(5, "Poland", true, `{"endpoints":["162.159.192.1:2408"]}`), warpIn(6, "Germany", true, `{"name":"DE WARP","endpoints":["188.114.97.5:500"],"mtu":1300}`))
+	r.panel.setInbounds(warpIn(5, "Poland", true, `{"endpoints":["162.159.192.1:2408"]}`), warpIn(6, "Germany", true, `{"name":"left over","endpoints":["188.114.97.5:500"],"mtu":1300}`))
 	if _, err := r.app.prov.refresh(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestEachWarpInboundGivesItsOwnNodes(t *testing.T) {
 	if len(got) != 6 {
 		t.Fatalf("%d lines", len(got))
 	}
-	if !strings.Contains(lucxVpnConf(got[1]), "# Poland\n") || !strings.Contains(lucxVpnConf(got[4]), "# DE WARP\n") || !strings.Contains(lucxVpnConf(got[4]), "MTU = 1300\n") {
+	if !strings.Contains(lucxVpnConf(got[1]), "# Poland\n") || !strings.Contains(lucxVpnConf(got[4]), "# Germany\n") || !strings.Contains(lucxVpnConf(got[4]), "MTU = 1300\n") {
 		t.Error("each inbound has its own name and settings")
 	}
 	// A switched-off inbound gives nothing.

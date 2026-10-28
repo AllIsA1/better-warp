@@ -55,7 +55,6 @@ type warpInbound struct {
 
 // inboundWarp is the settings JSON of a WARP inbound (checked by the panel when it is saved).
 type inboundWarp struct {
-	Name      string   `json:"name"`
 	Endpoints []string `json:"endpoints"`
 	MTU       int      `json:"mtu"`
 	DNS       string   `json:"dns"`

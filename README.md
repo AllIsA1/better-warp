@@ -10,8 +10,8 @@ plugin system **host-9** or newer (the permission `peer:better-cores`, see below
 ## WARP as an inbound protocol
 
 On a panel build that has it (`v3.10.2-lucx.320-plugins.3` and later) **WARP is a protocol in Inbounds → Add inbound**, next to olcRTC, VLESS and the
-rest. The inbound listens on nothing and runs nothing: it holds the settings of the WARP nodes (name, up to three endpoints, MTU, DNS, IPv6, keepalive,
-the junk-packet preset and the AmneziaWG fields), and **the clients attached to it get those nodes** in their subscription. Several WARP inbounds
+rest. The inbound listens on nothing and runs nothing: it holds the settings of the WARP nodes (up to three endpoints, MTU, DNS, IPv6, keepalive,
+the junk-packet preset and the AmneziaWG fields; the name of the nodes is the inbound's remark), and **the clients attached to it get those nodes** in their subscription. Several WARP inbounds
 are several sets of nodes; a switched-off inbound gives nothing. An inbound with no endpoint of its own uses the endpoints this plugin keeps (the
 scan's result).
 
