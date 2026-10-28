@@ -1,0 +1,43 @@
+{
+  "id": "better-warp",
+  "name": "Better WARP",
+  "version": "1.0.0",
+  "apiVersion": "1",
+  "description": "Cloudflare WARP over AmneziaWG as a protocol of the subscription: each subscriber gets WARP nodes in the same four forms as an AmneziaWG node (vpn://, amneziawg://, the older amneziawg:// link, .conf), with their own WARP device, junk-packet settings, a WARP+ license, and a check and an endpoint scanner (to find the quickest endpoints) that run in Better Cores.",
+  "author": "AllIsA1",
+  "license": "MIT",
+  "type": "process",
+  "scope": "master",
+  "run": {
+    "command": "bin/${arch}/betterwarp"
+  },
+  "permissions": [
+    "seam:sub",
+    "api:clients:read",
+    "network",
+    "ui:menu",
+    "peer:better-cores"
+  ],
+  "requires": [
+    "better-cores"
+  ],
+  "ui": {
+    "menu": [
+      {
+        "title": "WARP",
+        "icon": "cloud",
+        "path": "/ui/index.html"
+      }
+    ]
+  },
+  "seams": [
+    {
+      "engine": "sub",
+      "mode": "after",
+      "methods": [
+        "GET"
+      ],
+      "route": "/links/:subid"
+    }
+  ]
+}
