@@ -7,6 +7,19 @@ a scanner that find the quickest Cloudflare endpoint.
 It needs **[Better Cores](https://github.com/AllIsA1/better-cores) 0.2.0 or newer** (the plugin system installs and turns it on first) and the
 plugin system **host-9** or newer (the permission `peer:better-cores`, see below).
 
+## WARP as an inbound protocol
+
+On a panel build that has it (`v3.10.2-lucx.320-plugins.3` and later) **WARP is a protocol in Inbounds → Add inbound**, next to olcRTC, VLESS and the
+rest. The inbound listens on nothing and runs nothing: it holds the settings of the WARP nodes (name, up to three endpoints, MTU, DNS, IPv6, keepalive,
+the junk-packet preset and the AmneziaWG fields), and **the clients attached to it get those nodes** in their subscription. Several WARP inbounds
+are several sets of nodes; a switched-off inbound gives nothing. An inbound with no endpoint of its own uses the endpoints this plugin keeps (the
+scan's result).
+
+The plugin reads the inbounds (`api:inbounds:read`, new in 1.1.0: confirm it when updating), registers a device for every active subscription that is
+on one, and writes the lines. The WARP page then keeps the account (WARP+), the devices and the scanner; the rest of its settings are the inbounds'.
+**With no WARP inbound** (or on a panel without the protocol, or if the permission is missing) the plugin works as before from its own page, as
+described below.
+
 ## What a subscriber gets
 
 For each endpoint (one to three) the subscription carries one node, as three lines in the order the subscription page groups them:

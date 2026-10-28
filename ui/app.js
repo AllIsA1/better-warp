@@ -8,6 +8,15 @@
       intro:
         'Cloudflare WARP as a protocol of your subscriptions, over AmneziaWG: every subscriber gets WARP nodes in the same four forms as an AmneziaWG node (vpn://, amneziawg://, the older amneziawg:// link and .conf). The traffic goes from the client straight to Cloudflare and does not pass this server or its traffic counters.',
       engineMissing: function (e) { return 'The WARP engine of Better Cores is not available: ' + e + ' Checking and scanning need it; the subscription lines work without it.'; },
+      inboundsTitle: 'WARP inbounds',
+      inboundsNote:
+        'The settings of the WARP nodes, and who gets them, are in Inbounds: add an inbound of the WARP protocol and attach clients to it. This page keeps the account, the devices and the scanner.',
+      inboundsOn: 'on',
+      inboundsOff: 'off',
+      inboundSubs: function (n) { return n + (n === 1 ? ' subscription' : ' subscriptions'); },
+      inboundsMissing: 'This plugin cannot read the panel’s inbounds, so it uses its own settings below. Reinstall or update it and confirm all its permissions.',
+      defaultEndpoints: 'Default endpoints',
+      defaultEndpointsHint: 'Used by WARP inbounds that name no endpoint of their own. A scan keeps them at the quickest ones.',
       protocol: 'WARP in subscriptions',
       enabled: 'Give WARP to subscribers',
       enabledHint: 'Off: subscriptions stay exactly as the panel makes them.',
@@ -116,6 +125,15 @@
       intro:
         'Cloudflare WARP как протокол ваших подписок, поверх AmneziaWG: каждый подписчик получает узлы WARP в тех же четырёх формах, что и узел AmneziaWG (vpn://, amneziawg://, старая ссылка amneziawg:// и .conf). Трафик идёт от клиента прямо в Cloudflare и не проходит через этот сервер и его счётчики.',
       engineMissing: function (e) { return 'Движок WARP из Better Cores недоступен: ' + e + ' Проверка и сканер без него не работают; строки подписки работают.'; },
+      inboundsTitle: 'WARP-инбаунды',
+      inboundsNote:
+        'Настройки узлов WARP и то, кому они достаются, — в разделе Inbounds: добавьте inbound протокола WARP и привяжите к нему клиентов. Здесь — аккаунт, устройства и сканер.',
+      inboundsOn: 'включён',
+      inboundsOff: 'выключен',
+      inboundSubs: function (n) { var m = n % 10, h = n % 100; return n + ' ' + (m === 1 && h !== 11 ? 'подписка' : m >= 2 && m <= 4 && (h < 12 || h > 14) ? 'подписки' : 'подписок'); },
+      inboundsMissing: 'Плагин не может прочитать inbounds панели и пользуется своими настройками ниже. Переустановите или обновите его и подтвердите все права.',
+      defaultEndpoints: 'Endpoints по умолчанию',
+      defaultEndpointsHint: 'Берут WARP-инбаунды, у которых свои endpoints не заданы. Сканер держит их на самых быстрых.',
       protocol: 'WARP в подписках',
       enabled: 'Выдавать WARP подписчикам',
       enabledHint: 'Выключено: подписки остаются ровно такими, какими их делает панель.',
@@ -301,11 +319,37 @@
 
   // ---- sections ---------------------------------------------------------------------------------
 
+  function secInbounds() {
+    var s = editable(), t = T();
+    var el = document.getElementById('secProtocol');
+    var rows = state.inbounds.map(function (x) {
+      return h('tr', {}, [
+        h('td', { text: x.remark || '#' + x.id }),
+        h('td', {}, [chip(x.enable ? t.inboundsOn : t.inboundsOff, x.enable ? 'good' : '')]),
+        h('td', { class: 'mono', text: (x.endpoints || []).join(', ') }),
+        h('td', { text: t.inboundSubs(x.subs) }),
+      ]);
+    });
+    el.replaceChildren(
+      h('h2', { text: t.inboundsTitle }),
+      h('p', { class: 'muted small', text: t.inboundsNote }),
+      h('table', {}, [h('tbody', {}, rows)]),
+      h('div', { class: 'grid' }, [
+        field(t.mode, h('select', { onchange: function (e) { s.mode = e.target.value; saveSettings(); } }, [
+          h('option', { value: 'perClient', text: t.modePer, selected: s.mode === 'perClient' }),
+          h('option', { value: 'shared', text: t.modeShared, selected: s.mode === 'shared' }),
+        ]), t.modeHint),
+      ])
+    );
+  }
+
   function secProtocol() {
+    if (state.source === 'inbounds') return secInbounds();
     var s = editable(), t = T();
     var el = document.getElementById('secProtocol');
     el.replaceChildren(
       h('h2', { text: t.protocol }),
+      state.inboundsError ? h('p', { class: 'banner', text: t.inboundsMissing }) : null,
       h('div', { class: 'row' }, [check(t.enabled, s.enabled, function (v) { s.enabled = v; saveSettings(); }), h('span', { class: 'muted small', text: t.enabledHint })]),
       h('div', { class: 'grid' }, [
         field(t.mode, h('select', { onchange: function (e) { s.mode = e.target.value; saveSettings(); } }, [
@@ -385,6 +429,13 @@
       ['standard', t.presetStandard], ['light', t.presetLight], ['strong', t.presetStrong], ['custom', t.presetCustom],
     ].map(function (p) { return h('option', { value: p[0], text: p[1], selected: s.preset === p[0] }); }));
 
+    if (state.source === 'inbounds') {
+      el.replaceChildren(
+        h('h2', { text: t.defaultEndpoints }), eps, h('p', { class: 'muted small', text: t.defaultEndpointsHint }),
+        h('div', { class: 'row' }, [h('button', { class: 'primary', text: t.save, onclick: saveSettings })])
+      );
+      return;
+    }
     el.replaceChildren(
       h('h2', { text: t.settings }),
       h('h3', { text: t.endpoints }), eps, h('p', { class: 'muted small', text: t.endpointHint }),
@@ -530,7 +581,8 @@
     var t = T(), s = editable(), el = document.getElementById('secSubs');
     var search = h('input', { type: 'search', placeholder: t.subsSearch, value: subsQuery, onkeydown: function (e) { if (e.key === 'Enter') { subsQuery = e.target.value; loadSubs(); } } });
     var out = [h('h2', { text: t.subs }), h('div', { class: 'row' }, [search, h('button', { text: t.subsFind, onclick: function () { subsQuery = search.value; loadSubs(); } })])];
-    if (s.scope !== 'selected') out.push(h('p', { class: 'muted small', text: t.selectNote }));
+    var byInbounds = state.source === 'inbounds';
+    if (!byInbounds && s.scope !== 'selected') out.push(h('p', { class: 'muted small', text: t.selectNote }));
     if (!subsData || !subsData.loaded) out.push(h('p', { class: 'muted', text: subsData && subsData.error ? subsData.error : t.subsNotLoaded }));
     else if (!subsData.subs.length) out.push(h('p', { class: 'muted', text: t.subsNone }));
     else {
@@ -545,7 +597,7 @@
         ]));
       });
       var tbl = h('table', {}, [h('thead', {}, [h('tr', {}, [t.colOn, t.colSub, t.colState].map(function (c) { return h('th', { text: c }); }))]), tbody]);
-      if (s.scope !== 'selected') tbl.querySelectorAll('input').forEach(function (i) { i.disabled = true; });
+      if (byInbounds || s.scope !== 'selected') tbl.querySelectorAll('input').forEach(function (i) { i.disabled = true; });
       out.push(tbl);
     }
     el.replaceChildren.apply(el, out);

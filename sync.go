@@ -5,9 +5,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -34,6 +36,65 @@ type roster struct {
 	at     time.Time
 	err    string
 	subs   map[string]*subInfo
+
+	// The WARP inbounds of the panel (protocol "warp") and which subscriptions have a usable client attached to which.
+	// While there is any, they decide who gets WARP and with what settings; the plugin's own settings serve only
+	// the defaults (the endpoints a scan keeps) and the account.
+	inbounds    []warpInbound
+	inboundsErr string
+	attached    map[string][]int // subscription id -> ids of the WARP inbounds a usable client of it is attached to
+}
+
+// warpInbound is a row of the panel's inbound list whose protocol is warp.
+type warpInbound struct {
+	ID     int
+	Remark string
+	Enable bool
+	S      inboundWarp
+}
+
+// inboundWarp is the settings JSON of a WARP inbound (checked by the panel when it is saved).
+type inboundWarp struct {
+	Name      string   `json:"name"`
+	Endpoints []string `json:"endpoints"`
+	MTU       int      `json:"mtu"`
+	DNS       string   `json:"dns"`
+	IPv6      *bool    `json:"ipv6"`
+	Keepalive *int     `json:"keepalive"`
+	Preset    string   `json:"preset"`
+	AWG       awgSet   `json:"awg"`
+}
+
+// hasInbounds says whether the panel has any WARP inbound: the plugin is then driven by them.
+func (r *roster) hasInbounds() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.inbounds) > 0
+}
+
+// nodesFor are the enabled WARP inbounds a usable client of the subscription is attached to.
+func (r *roster) nodesFor(subID string) []warpInbound {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var out []warpInbound
+	for _, in := range r.inbounds {
+		if !in.Enable {
+			continue
+		}
+		for _, id := range r.attached[subID] {
+			if id == in.ID {
+				out = append(out, in)
+				break
+			}
+		}
+	}
+	return out
+}
+
+func (r *roster) warpInbounds() []warpInbound {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return append([]warpInbound(nil), r.inbounds...)
 }
 
 func (r *roster) active(subID string) bool {
@@ -59,6 +120,7 @@ type clientRow struct {
 	Enable     bool   `json:"enable"`
 	TotalGB    int64  `json:"totalGB"`
 	ExpiryTime int64  `json:"expiryTime"`
+	InboundIDs []int  `json:"inboundIds"`
 	Traffic    *struct {
 		Up   int64 `json:"up"`
 		Down int64 `json:"down"`
@@ -170,20 +232,87 @@ func (p *provisioner) setErr(msg string) {
 	p.mu.Unlock()
 }
 
-// refresh reads the clients from the panel.
+// refresh reads the clients and the WARP inbounds from the panel. The panel is asked before the roster is locked:
+// a subscription request only ever looks at memory.
 func (p *provisioner) refresh(ctx context.Context) ([]clientRow, error) {
 	var rows []clientRow
 	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	err := p.api.Do(cctx, http.MethodGet, "/clients/list", nil, &rows)
+	var ins []warpInbound
+	var inErr error
+	if err == nil {
+		ins, inErr = p.loadInbounds(cctx)
+	}
+	now := p.now()
 	p.roster.mu.Lock()
 	defer p.roster.mu.Unlock()
 	if err != nil {
 		p.roster.err = err.Error()
 		return nil, err
 	}
-	p.roster.subs, p.roster.loaded, p.roster.at, p.roster.err = buildRoster(rows, p.now().UnixMilli()), true, p.now(), ""
+	p.roster.subs, p.roster.loaded, p.roster.at, p.roster.err = buildRoster(rows, now.UnixMilli()), true, now, ""
+	if inErr != nil {
+		// A plugin installed before it had the permission reads none, and stays on its own settings; what was known stays.
+		p.roster.inboundsErr = inErr.Error()
+		return rows, nil
+	}
+	p.roster.inboundsErr = ""
+	p.roster.inbounds, p.roster.attached = ins, attachedTo(ins, rows, now.UnixMilli())
 	return rows, nil
+}
+
+// loadInbounds reads the WARP inbounds of the panel.
+func (p *provisioner) loadInbounds(ctx context.Context) ([]warpInbound, error) {
+	var list []struct {
+		ID       int             `json:"id"`
+		Remark   string          `json:"remark"`
+		Enable   bool            `json:"enable"`
+		Protocol string          `json:"protocol"`
+		Settings json.RawMessage `json:"settings"` // an object in the list, a string in some other answers
+	}
+	if err := p.api.Do(ctx, http.MethodGet, "/inbounds/list", nil, &list); err != nil {
+		return nil, err
+	}
+	var ins []warpInbound
+	for _, in := range list {
+		if in.Protocol != "warp" {
+			continue
+		}
+		w := warpInbound{ID: in.ID, Remark: in.Remark, Enable: in.Enable}
+		w.S = decodeInboundWarp(in.Settings) // settings the panel checked; a row it cannot read gets the defaults
+		ins = append(ins, w)
+	}
+	return ins, nil
+}
+
+// decodeInboundWarp reads the settings of a WARP inbound, which the panel gives as an object or as a string holding one.
+func decodeInboundWarp(raw json.RawMessage) inboundWarp {
+	var s inboundWarp
+	var text string
+	if json.Unmarshal(raw, &text) == nil {
+		raw = json.RawMessage(text)
+	}
+	_ = json.Unmarshal(raw, &s)
+	return s
+}
+
+// attachedTo maps each subscription to the WARP inbounds a usable client of it is attached to.
+func attachedTo(ins []warpInbound, rows []clientRow, nowMs int64) map[string][]int {
+	attached := map[string][]int{}
+	for _, c := range rows {
+		if c.SubID == "" || !c.usable(nowMs) {
+			continue
+		}
+		for _, id := range c.InboundIDs {
+			for _, in := range ins {
+				if in.ID == id && !slices.Contains(attached[c.SubID], id) {
+					attached[c.SubID] = append(attached[c.SubID], id)
+				}
+			}
+		}
+	}
+	return attached
 }
 
 func (p *provisioner) tick(ctx context.Context) {
@@ -193,10 +322,32 @@ func (p *provisioner) tick(ctx context.Context) {
 		return
 	}
 	s := p.store.settings()
-	if s.Enabled && s.Mode == "perClient" {
+	if p.meant(s) && s.Mode == "perClient" {
 		p.provision(ctx, s)
 	}
 	p.cleanup(ctx, rows)
+}
+
+// meant says whether WARP is to be given out at all: while the panel has WARP inbounds, when one of them is on;
+// otherwise when the plugin's own switch is on.
+func (p *provisioner) meant(s settings) bool {
+	if p.roster.hasInbounds() {
+		for _, in := range p.roster.warpInbounds() {
+			if in.Enable {
+				return true
+			}
+		}
+		return false
+	}
+	return s.Enabled
+}
+
+// wants says whether a subscription is to get WARP.
+func (p *provisioner) wants(s settings, subID string) bool {
+	if p.roster.hasInbounds() {
+		return len(p.roster.nodesFor(subID)) > 0
+	}
+	return s.inScope(subID)
 }
 
 // wanted lists the subscriptions that should have a device and have none, in a stable order.
@@ -204,7 +355,7 @@ func (p *provisioner) wanted(s settings) []string {
 	subs, _, _, _ := p.roster.snapshot()
 	var out []string
 	for _, sub := range subs {
-		if sub.Active && s.inScope(sub.ID) && p.store.device(sub.ID) == nil {
+		if sub.Active && p.wants(s, sub.ID) && p.store.device(sub.ID) == nil {
 			out = append(out, sub.ID)
 		}
 	}

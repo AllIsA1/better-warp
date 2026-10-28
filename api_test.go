@@ -379,3 +379,11 @@ func TestAFailedScheduledScanIsNotRetriedEveryFiveMinutes(t *testing.T) {
 		t.Error("it tried again at once")
 	}
 }
+
+// newAPIRigFrom serves the API of an existing rig.
+func newAPIRigFrom(t *testing.T, r *testRig) *apiRig {
+	t.Helper()
+	srv := httptest.NewServer(newMux(r.app))
+	t.Cleanup(srv.Close)
+	return &apiRig{r, srv}
+}

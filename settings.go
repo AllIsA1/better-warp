@@ -244,3 +244,37 @@ func (s settings) inScope(subID string) bool {
 
 // licensePattern is the shape of a WARP+ license key.
 var licensePattern = regexp.MustCompile(`^[A-Za-z0-9]{8}-[A-Za-z0-9]{8}-[A-Za-z0-9]{8}$`)
+
+// withInbound is the settings a WARP inbound asks for: its own fields over the plugin's, which stay as the defaults (the
+// endpoints a scan keeps, the account's mode). The panel checked the inbound when it was saved.
+func (s settings) withInbound(in warpInbound) settings {
+	out := s
+	name := strings.TrimSpace(in.S.Name)
+	if name == "" {
+		name = strings.TrimSpace(in.Remark)
+	}
+	if name != "" && utf8.RuneCountInString(name) <= 60 && !strings.ContainsAny(name, "\r\n\x00") {
+		out.Name = name
+	}
+	if len(in.S.Endpoints) > 0 {
+		out.Endpoints = in.S.Endpoints
+	}
+	if in.S.MTU >= 576 && in.S.MTU <= 1420 {
+		out.MTU = in.S.MTU
+	}
+	if strings.TrimSpace(in.S.DNS) != "" {
+		out.DNS = in.S.DNS
+	}
+	if in.S.IPv6 != nil {
+		out.IPv6 = *in.S.IPv6
+	}
+	if in.S.Keepalive != nil && *in.S.Keepalive >= 0 && *in.S.Keepalive <= 600 {
+		out.Keepalive = *in.S.Keepalive
+	}
+	if p, ok := presets[in.S.Preset]; ok {
+		out.AWG = p
+	} else if in.S.AWG.validate() == nil {
+		out.AWG = in.S.AWG
+	}
+	return out
+}

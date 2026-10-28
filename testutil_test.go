@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -18,9 +19,10 @@ import (
 
 // fakePanel answers the one panel call the plugin makes.
 type fakePanel struct {
-	mu   sync.Mutex
-	rows []clientRow
-	err  error
+	mu       sync.Mutex
+	rows     []clientRow
+	err      error
+	inbounds []map[string]any // the panel's inbound list; nil makes the call fail as an old permission set would
 }
 
 func (f *fakePanel) Do(_ context.Context, method, path string, _, out any) error {
@@ -28,6 +30,13 @@ func (f *fakePanel) Do(_ context.Context, method, path string, _, out any) error
 	defer f.mu.Unlock()
 	if f.err != nil {
 		return f.err
+	}
+	if method == http.MethodGet && path == "/inbounds/list" {
+		if f.inbounds == nil {
+			return errors.New("panel answered HTTP 403 for GET /inbounds/list")
+		}
+		raw, _ := json.Marshal(f.inbounds)
+		return json.Unmarshal(raw, out)
 	}
 	if method != http.MethodGet || path != "/clients/list" {
 		return fmt.Errorf("unexpected panel call %s %s", method, path)
@@ -231,3 +240,24 @@ func (r *testRig) enable(t *testing.T, mut func(*settings)) {
 }
 
 func newFakeNow() time.Time { return time.Now() }
+
+// warpIn is a row of the panel's inbound list: a WARP inbound with the given settings JSON.
+func warpIn(id int, remark string, enable bool, settings string) map[string]any {
+	// The panel's inbound list carries the settings as an object.
+	return map[string]any{"id": id, "remark": remark, "enable": enable, "protocol": "warp", "settings": json.RawMessage(settings)}
+}
+
+func (f *fakePanel) setInbounds(list ...map[string]any) {
+	f.mu.Lock()
+	if list == nil {
+		list = []map[string]any{}
+	}
+	f.inbounds = list
+	f.mu.Unlock()
+}
+
+func clientOn(email, sub string, enable bool, inbounds ...int) clientRow {
+	c := client(email, sub, enable)
+	c.InboundIDs = inbounds
+	return c
+}

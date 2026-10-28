@@ -162,11 +162,6 @@ func TestOnlyASuccessfulPanelAnswerIsTouched(t *testing.T) {
 	if rep, _ := subscriptionSeam(c, w); rep.Action != "keep" {
 		t.Errorf("404: %s", rep.Action)
 	}
-	c = rawCall("", false)
-	c.Response.Body = nil
-	if rep, _ := subscriptionSeam(c, w); rep.Action != "keep" {
-		t.Errorf("empty: %s", rep.Action)
-	}
 	c = rawCall("{\"json\":true}", false)
 	c.Response.Headers["Content-Type"] = []string{"application/json"}
 	if rep, _ := subscriptionSeam(c, w); rep.Action != "keep" {
@@ -215,5 +210,41 @@ func TestThePageListGetsTheLinesToo(t *testing.T) {
 	c.Response.Headers["Content-Type"] = []string{"text/html"}
 	if rep, _ := subscriptionSeam(c, w); rep.Action != "keep" {
 		t.Errorf("custom page: %s", rep.Action)
+	}
+}
+
+func TestAnEmptyAnswerIsAWarpOnlySubscriberAndGetsTheLines(t *testing.T) {
+	_, w := seamRig(t)
+	for _, enc := range []string{"base64", "plain"} {
+		c := rawCall("", false)
+		c.Response.Body = nil
+		c.Response.Headers["X-Lucx-Sub-Encoding"] = []string{enc}
+		rep, err := subscriptionSeam(c, w)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := string(modified(t, rep))
+		if enc == "base64" {
+			dec, derr := base64.StdEncoding.DecodeString(body)
+			if derr != nil {
+				t.Fatalf("an encrypted subscription must stay base64: %v", derr)
+			}
+			body = string(dec)
+		}
+		if lines := strings.Split(body, "\n"); len(lines) != 3 || !strings.HasPrefix(lines[0], "amneziawg://") || !strings.HasPrefix(lines[1], "vpn://") {
+			t.Errorf("%s: %q", enc, lines)
+		}
+	}
+	// Without the header the plain form is used; a subscriber that gets nothing is left as it is.
+	c := rawCall("", false)
+	c.Response.Body = nil
+	if rep, _ := subscriptionSeam(c, w); strings.HasPrefix(string(modified(t, rep)), "dmxlc3M") {
+		t.Error("no header: plain")
+	}
+	c = rawCall("", false)
+	c.Response.Body = nil
+	c.Request.Params["subid"] = "sub2"
+	if rep, _ := subscriptionSeam(c, w); rep.Action != "keep" {
+		t.Errorf("nothing to add: %s", rep.Action)
 	}
 }

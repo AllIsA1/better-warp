@@ -42,19 +42,48 @@ type warpLines struct {
 // is out of scope or switched off, or its device is not there yet).
 func (w *warpLines) linesFor(subID string) []string {
 	s := w.store.settings()
-	if !s.Enabled || !s.inScope(subID) || !w.roster.active(subID) {
+	if !w.roster.active(subID) {
 		return nil
 	}
-	dev := w.store.main()
-	if s.Mode == "perClient" {
-		dev = w.store.device(subID)
+	if w.roster.hasInbounds() {
+		return w.inboundLines(s, subID)
 	}
+	if !s.Enabled || !s.inScope(subID) {
+		return nil
+	}
+	dev := w.device(s, subID)
+	if dev == nil {
+		return nil
+	}
+	return s.nodeLines(*dev)
+}
+
+// device is the WARP device a subscription uses: its own, or the main one in shared mode.
+func (w *warpLines) device(s settings, subID string) *device {
+	if s.Mode == "perClient" {
+		return w.store.device(subID)
+	}
+	return w.store.main()
+}
+
+// nodeLines are the lines of every endpoint of the settings, one node each.
+func (s settings) nodeLines(dev device) []string {
+	var out []string
+	for i, ep := range s.Endpoints {
+		out = append(out, s.lines(node{Dev: dev, Endpoint: ep, Name: s.nodeName(i)})...)
+	}
+	return out
+}
+
+// inboundLines: one set of nodes for each WARP inbound the subscription has a client on, as that inbound is set.
+func (w *warpLines) inboundLines(s settings, subID string) []string {
+	dev := w.device(s, subID)
 	if dev == nil {
 		return nil
 	}
 	var out []string
-	for i, ep := range s.Endpoints {
-		out = append(out, s.lines(node{Dev: *dev, Endpoint: ep, Name: s.nodeName(i)})...)
+	for _, in := range w.roster.nodesFor(subID) {
+		out = append(out, s.withInbound(in).nodeLines(*dev)...)
 	}
 	return out
 }
@@ -69,7 +98,7 @@ func subscriptionSeam(c SeamCall, w *warpLines) (SeamReply, error) {
 	if c.Seam.Engine != "sub" || c.Seam.Mode != "after" {
 		return SeamReply{}, fmt.Errorf("no seam %s/%s/%s is declared", c.Seam.Engine, c.Seam.Mode, c.Seam.Route)
 	}
-	if c.Seam.Route != seamRoute || c.Response == nil || c.Response.Status != http.StatusOK || len(c.Response.Body) == 0 {
+	if c.Seam.Route != seamRoute || c.Response == nil || c.Response.Status != http.StatusOK {
 		return Keep(), nil
 	}
 	subID := c.Request.Params["subid"]
@@ -87,7 +116,10 @@ func subscriptionSeam(c SeamCall, w *warpLines) (SeamReply, error) {
 	if !ok {
 		return Keep(), nil
 	}
-	original := strings.Split(strings.TrimRight(text, "\n"), "\n")
+	var original []string
+	if strings.TrimSpace(text) != "" {
+		original = strings.Split(strings.TrimRight(text, "\n"), "\n")
+	}
 	lines := w.apply(subID, slices.Clone(original))
 	if slices.Equal(lines, original) {
 		return Keep(), nil
@@ -117,6 +149,11 @@ func isHTML(r *SeamResponse) bool {
 // subscriptionText returns the lines of a subscription: base64 of one link per line, or the same as plain text (the
 // panel's "encrypt subscription" setting off). Anything else is not one.
 func subscriptionText(r *SeamResponse) (text string, wrapped, ok bool) {
+	if len(r.Body) == 0 {
+		// A subscriber of a WARP inbound only has nothing of the panel's own. The panel says in which form it answers
+		// (X-Lucx-Sub-Encoding); without the header the plain form is the safe one.
+		return "", headerIs(r.Headers, "X-Lucx-Sub-Encoding", "base64") && isTextPlain(r), isTextPlain(r)
+	}
 	if decoded, err := base64.StdEncoding.DecodeString(string(r.Body)); err == nil {
 		return string(decoded), true, true
 	}
@@ -170,4 +207,30 @@ func pageWithLines(body []byte, subID string, w *warpLines) ([]byte, bool) {
 	b.Write(out)
 	b.Write(body[end:])
 	return b.Bytes(), true
+}
+
+func headerIs(h map[string][]string, name, want string) bool {
+	for k, values := range h {
+		if strings.EqualFold(k, name) {
+			for _, v := range values {
+				if strings.EqualFold(strings.TrimSpace(v), want) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func isTextPlain(r *SeamResponse) bool {
+	for k, values := range r.Headers {
+		if strings.EqualFold(k, "Content-Type") {
+			for _, v := range values {
+				if strings.HasPrefix(strings.ToLower(strings.TrimSpace(v)), "text/plain") {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

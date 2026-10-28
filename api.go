@@ -105,13 +105,26 @@ type rosterView struct {
 	Error         string     `json:"error,omitempty"`
 }
 
+// inboundView is a WARP inbound of the panel as the page lists it.
+type inboundView struct {
+	ID        int      `json:"id"`
+	Remark    string   `json:"remark"`
+	Enable    bool     `json:"enable"`
+	Endpoints []string `json:"endpoints"`
+	Subs      int      `json:"subs"` // subscriptions with a usable client on it
+}
+
 type stateView struct {
-	Settings settings          `json:"settings"`
-	Presets  map[string]awgSet `json:"presets"`
-	Account  accountView       `json:"account"`
-	Devices  devicesView       `json:"devices"`
-	Roster   rosterView        `json:"roster"`
-	Engine   struct {
+	Source   string        `json:"source"` // "inbounds": the panel's WARP inbounds decide; "own": this plugin's settings
+	Inbounds []inboundView `json:"inbounds"`
+	// InboundsError is why the panel's inbounds could not be read (the plugin then uses its own settings).
+	InboundsError string            `json:"inboundsError,omitempty"`
+	Settings      settings          `json:"settings"`
+	Presets       map[string]awgSet `json:"presets"`
+	Account       accountView       `json:"account"`
+	Devices       devicesView       `json:"devices"`
+	Roster        rosterView        `json:"roster"`
+	Engine        struct {
 		OK      bool   `json:"ok"`
 		Error   string `json:"error,omitempty"`
 		Version int    `json:"version,omitempty"`
@@ -131,6 +144,10 @@ func tp(t time.Time) *time.Time {
 func (a *app) state(ctx context.Context) stateView {
 	var v stateView
 	v.Settings, v.Presets = a.store.settings(), presets
+	v.Source, v.Inbounds = a.inboundViews(v.Settings)
+	a.prov.roster.mu.RLock()
+	v.InboundsError = a.prov.roster.inboundsErr
+	a.prov.roster.mu.RUnlock()
 	if m := a.store.main(); m != nil {
 		v.Account = accountView{Registered: true, ID: shortID(m.ID), Created: tp(m.Created), License: m.PlusKey != ""}
 		if info, errText, at := a.accountInfo(); info != nil {
@@ -151,7 +168,7 @@ func (a *app) state(ctx context.Context) stateView {
 	if retry.After(a.now()) {
 		v.Devices.RetryAt = tp(retry)
 	}
-	if v.Settings.Enabled && v.Settings.Mode == "perClient" {
+	if a.prov.meant(v.Settings) && v.Settings.Mode == "perClient" {
 		v.Devices.Wanted = len(a.prov.wanted(v.Settings))
 	}
 	info, engErr := a.engineStatus(ctx)
@@ -161,6 +178,29 @@ func (a *app) state(ctx context.Context) stateView {
 	v.Scanning = a.scanning
 	a.mu.Unlock()
 	return v
+}
+
+// inboundViews says where the settings come from and lists the WARP inbounds.
+func (a *app) inboundViews(s settings) (string, []inboundView) {
+	ins := a.prov.roster.warpInbounds()
+	out := []inboundView{}
+	if len(ins) == 0 {
+		return "own", out
+	}
+	subs, _, _, _ := a.prov.roster.snapshot()
+	for _, in := range ins {
+		v := inboundView{ID: in.ID, Remark: in.Remark, Enable: in.Enable, Endpoints: s.withInbound(in).Endpoints}
+		for _, sub := range subs {
+			for _, n := range a.prov.roster.nodesFor(sub.ID) {
+				if n.ID == in.ID && sub.Active {
+					v.Subs++
+					break
+				}
+			}
+		}
+		out = append(out, v)
+	}
+	return "inbounds", out
 }
 
 // shortID shows enough of a device id to tell devices apart and not enough to use it.
@@ -204,10 +244,21 @@ func (a *app) handlePreview(w http.ResponseWriter, r *http.Request) {
 	if m := a.store.main(); m != nil {
 		d.PeerKey, d.V4, d.V6 = m.PeerKey, m.V4, m.V6
 	}
-	var out []map[string]string
-	for i, ep := range s.Endpoints {
-		n := node{Dev: d, Endpoint: ep, Name: s.nodeName(i)}
-		out = append(out, map[string]string{"name": n.Name, "endpoint": ep, "conf": s.conf(n)})
+	out := []map[string]string{}
+	preview := func(s settings) {
+		for i, ep := range s.Endpoints {
+			n := node{Dev: d, Endpoint: ep, Name: s.nodeName(i)}
+			out = append(out, map[string]string{"name": n.Name, "endpoint": ep, "conf": s.conf(n)})
+		}
+	}
+	if ins := a.prov.roster.warpInbounds(); len(ins) > 0 {
+		for _, in := range ins {
+			if in.Enable {
+				preview(s.withInbound(in))
+			}
+		}
+	} else {
+		preview(s)
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -232,12 +283,13 @@ func (a *app) handleSubs(w http.ResponseWriter, r *http.Request) {
 		if q != "" && !strings.Contains(strings.ToLower(sub.ID+" "+strings.Join(sub.Emails, " ")), q) {
 			continue
 		}
-		rows = append(rows, subRow{ID: sub.ID, Emails: sub.Emails, Active: sub.Active, Device: a.store.device(sub.ID) != nil, Selected: s.inScope(sub.ID)})
+		rows = append(rows, subRow{ID: sub.ID, Emails: sub.Emails, Active: sub.Active, Device: a.store.device(sub.ID) != nil, Selected: a.prov.wants(s, sub.ID)})
 		if len(rows) == 200 {
 			break
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"loaded": loaded, "error": rerr, "subs": rows, "scope": s.Scope})
+	source, _ := a.inboundViews(s)
+	writeJSON(w, http.StatusOK, map[string]any{"loaded": loaded, "error": rerr, "subs": rows, "scope": s.Scope, "source": source})
 }
 
 func (a *app) handleScope(w http.ResponseWriter, r *http.Request) {
