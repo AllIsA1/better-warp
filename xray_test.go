@@ -383,3 +383,52 @@ func TestThePipelineIsServed(t *testing.T) {
 		t.Errorf("status %d, patch %+v", resp.StatusCode, out.Patch)
 	}
 }
+
+func TestRussianSitesBypassWarpAndTheRestGoThrough(t *testing.T) {
+	r := xrayRig(t)
+	enableXray(t, r,
+		xrayRule{Name: "ru", Enabled: true, Action: "direct", Inbounds: []string{"in-1"}, Domains: []string{"domain:ru", "domain:xn--p1ai"}},
+		xrayRule{Name: "rest", Enabled: true, Inbounds: []string{"in-1"}},
+		xrayRule{Name: "everything", Enabled: true, All: true},
+	)
+	st := r.st.settings()
+	if st.Xray.Rules[0].Action != "direct" || st.Xray.Rules[1].Action != "warp" {
+		t.Fatalf("actions: %+v", st.Xray.Rules)
+	}
+	ops := patchDoc(t, r, baseConfig)
+	// The panel already has "direct": only the WARP outbound and the three rules are added.
+	if len(ops) != 4 {
+		t.Fatalf("ops = %+v", ops)
+	}
+	ru := ops[1].Value.(map[string]any)
+	if ru["outboundTag"] != "direct" || ru["ruleTag"] != "lucx-warp-1" || len(ru["domain"].([]string)) != 2 {
+		t.Errorf("ru rule: %+v", ru)
+	}
+	if rest := ops[2].Value.(map[string]any); rest["outboundTag"] != "warp" || rest["network"] != nil {
+		t.Errorf("rest rule: %+v", rest)
+	}
+	all := ops[3].Value.(map[string]any)
+	if all["outboundTag"] != "warp" || all["network"] != "tcp,udp" || all["inboundTag"] != nil {
+		t.Errorf("catch-all rule: %+v", all)
+	}
+}
+
+func TestADirectRuleBringsItsOutboundIfTheConfigLacksOne(t *testing.T) {
+	r := xrayRig(t)
+	enableXray(t, r, xrayRule{Name: "ru", Enabled: true, Action: "direct", Domains: []string{"domain:ru"}})
+	ops := patchDoc(t, r, `{"outbounds":[{"tag":"other","protocol":"freedom"}],"routing":{"rules":[]}}`)
+	if len(ops) != 3 || ops[0].Path != "/outbounds/-" || ops[0].Value.(map[string]any)["tag"] != "direct" {
+		t.Fatalf("ops = %+v", ops)
+	}
+}
+
+func TestAnUnknownActionIsRefused(t *testing.T) {
+	x := xraySet{Tag: "warp", Rules: []xrayRule{{Enabled: true, Action: "block", Domains: []string{"domain:a.com"}}}}
+	if err := x.normalize(); err == nil {
+		t.Error("an unknown action was accepted")
+	}
+	y := xraySet{Tag: "warp", Rules: []xrayRule{{Enabled: true}}}
+	if err := y.normalize(); err == nil {
+		t.Error("an empty rule was accepted")
+	}
+}

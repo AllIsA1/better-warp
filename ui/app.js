@@ -118,7 +118,7 @@
       previewNote: 'The first form is the config; the subscription also carries the same node as vpn:// and amneziawg://. Keys are the subscriber’s own.',
       xrayTitle: 'WARP for this server’s Xray',
       xrayIntro:
-        'The other direction: Xray on this server gets an outbound that leaves through WARP, and the rules below send what they match into it, for example OpenAI or Netflix, or the whole traffic of a protocol by its inbound tag. This server gets a WARP device of its own for it. The outbound is added to the Xray configuration while the plugin is on; switching the plugin off removes it.',
+        'The other direction: Xray on this server gets an outbound that leaves through WARP, and the rules below send what they match into it, for example OpenAI or Netflix, or the whole traffic of a protocol by its inbound tag. A rule can also send traffic around WARP, so “everything through WARP, except .ru sites” is two rules. This server gets a WARP device of its own for it. The outbound is added to the Xray configuration while the plugin is on; switching the plugin off removes it.',
       xrayEnabled: 'Give Xray the WARP outbound',
       xrayTag: 'Outbound tag',
       xrayEndpoint: 'Endpoint',
@@ -129,7 +129,12 @@
       xrayNotBuilt: 'Not in a built Xray configuration yet: restart Xray.',
       xrayProblem: function (e) { return 'Left out of the last configuration: ' + e; },
       xrayRules: 'Routing rules',
-      xrayRulesHint: 'A request goes through WARP when it satisfies every list a rule has. The rules are checked ahead of the panel’s own, after its API rule.',
+      xrayRulesHint: 'A request takes the first rule it satisfies in every list the rule has: the rule sends it through WARP or straight out, around WARP. Put the exceptions first, e.g. “Russian sites: direct” above “Everything else: WARP”. The rules are checked ahead of the panel’s own, after its API rule.',
+      xrayAction: 'Send',
+      xrayActionWarp: 'through WARP',
+      xrayActionDirect: 'directly (bypass WARP)',
+      xrayAll: 'All traffic (narrowed by the lists, if any)',
+      xrayAllHint: 'Without lists it takes everything no earlier rule did, also the panel’s own blocks that come after it: limit it by an inbound tag.',
       xrayRuleName: 'Name',
       xrayRuleOn: 'on',
       xrayDomains: 'Domains (one per line)',
@@ -268,7 +273,7 @@
       previewNote: 'Конфиг показан первым; в подписке тот же узел есть и как vpn://, и как amneziawg://. Ключи — собственные для каждого подписчика.',
       xrayTitle: 'WARP для Xray этого сервера',
       xrayIntro:
-        'Обратное направление: у Xray на этом сервере появляется outbound, выходящий через WARP, а правила ниже отправляют в него то, что подошло, например OpenAI или Netflix, либо весь трафик протокола по тегу его inbound. Для этого серверу выдаётся своё устройство WARP. Outbound добавляется в конфигурацию Xray, пока плагин включён; выключите плагин, и он исчезнет.',
+        'Обратное направление: у Xray на этом сервере появляется outbound, выходящий через WARP, а правила ниже отправляют в него то, что подошло, например OpenAI или Netflix, либо весь трафик протокола по тегу его inbound. Правило может и вести трафик мимо WARP, так что «всё через WARP, кроме .ru сайтов» — это два правила. Для этого серверу выдаётся своё устройство WARP. Outbound добавляется в конфигурацию Xray, пока плагин включён; выключите плагин, и он исчезнет.',
       xrayEnabled: 'Дать Xray outbound WARP',
       xrayTag: 'Тег outbound',
       xrayEndpoint: 'Endpoint',
@@ -279,7 +284,12 @@
       xrayNotBuilt: 'В собранную конфигурацию Xray ещё не входил: перезапустите Xray.',
       xrayProblem: function (e) { return 'В последнюю конфигурацию не попал: ' + e; },
       xrayRules: 'Правила маршрутизации',
-      xrayRulesHint: 'Запрос идёт через WARP, если подходит под все списки правила. Правила стоят перед правилами панели, но после её правила API.',
+      xrayRulesHint: 'Запрос попадает под первое правило, чьим спискам он соответствует: правило отправляет его через WARP или напрямую, минуя WARP. Исключения ставьте выше, например «Российские сайты: напрямую» над «Всё остальное: WARP». Правила стоят перед правилами панели, но после её правила API.',
+      xrayAction: 'Отправлять',
+      xrayActionWarp: 'через WARP',
+      xrayActionDirect: 'напрямую (мимо WARP)',
+      xrayAll: 'Весь трафик (сужается списками, если они есть)',
+      xrayAllHint: 'Без списков берёт всё, что не взяли правила выше, в том числе то, что блокируют правила панели ниже: ограничьте тегом inbound.',
       xrayRuleName: 'Название',
       xrayRuleOn: 'вкл',
       xrayDomains: 'Домены (по одному в строке)',
@@ -527,7 +537,13 @@
     ['Netflix', { domains: ['geosite:netflix'] }],
     ['Spotify', { domains: ['geosite:spotify'] }],
     ['Google', { domains: ['geosite:google'] }],
+    ['.ru → direct', { action: 'direct', domains: ['domain:ru', 'domain:su', 'domain:xn--p1ai'] }],
+    ['* → WARP', { all: true }],
   ];
+
+  function newRule(name, p) {
+    return { name: name, enabled: true, action: p.action || 'warp', all: !!p.all, domains: (p.domains || []).slice(), ips: [], inbounds: [] };
+  }
 
   function lines(text) { return text.split('\n').map(function (x) { return x.trim(); }).filter(Boolean); }
 
@@ -557,6 +573,11 @@
       h('div', { class: 'row' }, [
         check(t.xrayRuleOn, rule.enabled, function (v) { rule.enabled = v; }),
         h('input', { type: 'text', maxlength: 60, placeholder: t.xrayRuleName, value: rule.name || '', onchange: function (e) { rule.name = e.target.value; } }),
+        field(t.xrayAction, h('select', { onchange: function (e) { rule.action = e.target.value; } }, [
+          h('option', { value: 'warp', text: t.xrayActionWarp, selected: (rule.action || 'warp') === 'warp' }),
+          h('option', { value: 'direct', text: t.xrayActionDirect, selected: rule.action === 'direct' }),
+        ])),
+        check(t.xrayAll, rule.all, function (v) { rule.all = v; }),
         h('button', { class: 'danger', text: t.xrayRemoveRule, onclick: function () { x.rules.splice(i, 1); secXray(); } }),
       ]),
       h('div', { class: 'grid' }, [
@@ -564,6 +585,7 @@
         list(t.xrayIPs, 'ips', t.xrayIPsHint),
         list(t.xrayInbounds, 'inbounds', t.xrayInboundsHint),
       ]),
+      rule.all && !(rule.inbounds || []).length ? h('p', { class: 'muted small', text: t.xrayAllHint }) : null,
     ]);
   }
 
@@ -584,9 +606,9 @@
 
     out.push(h('h3', { text: t.xrayRules }), h('p', { class: 'muted small', text: t.xrayRulesHint }));
     x.rules.forEach(function (r, i) { out.push(ruleEditor(r, i)); });
-    var adders = [h('button', { text: t.xrayAddRule, onclick: function () { x.rules.push({ name: t.xrayNewRule, enabled: true, domains: [], ips: [], inbounds: [] }); secXray(); } }), h('span', { class: 'muted small', text: t.xrayPreset })];
+    var adders = [h('button', { text: t.xrayAddRule, onclick: function () { x.rules.push(newRule(t.xrayNewRule, {})); secXray(); } }), h('span', { class: 'muted small', text: t.xrayPreset })];
     XRAY_PRESETS.forEach(function (p) {
-      adders.push(h('button', { text: p[0], onclick: function () { x.rules.push({ name: p[0], enabled: true, domains: p[1].domains.slice(), ips: [], inbounds: [] }); secXray(); } }));
+      adders.push(h('button', { text: p[0], onclick: function () { x.rules.push(newRule(p[0], p[1])); secXray(); } }));
     });
     out.push(h('div', { class: 'row' }, adders));
     out.push(h('div', { class: 'row' }, [

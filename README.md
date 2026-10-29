@@ -36,6 +36,11 @@ On the plugin's page, *WARP for this server's Xray*:
   inbound tags; a request matches when it satisfies every list the rule has. Name an **inbound tag** (the one Inbounds shows, e.g. `inbound-443`) to
   send everything that protocol carries through WARP. Presets add the usual geosites. The rules are placed ahead of the panel's own, after its
   API rule.
+- **Bypass.** A rule sends its traffic *through WARP* or *directly* (around WARP, out of the server as it is). The first rule a request satisfies
+  wins, so exceptions go first. "Everything through WARP, but `.ru` sites direct" for a protocol is two rules on its inbound tag: (1) *direct*,
+  domains `domain:ru`, `domain:su`, `domain:xn--p1ai`; (2) *through WARP*, same inbound tag, no lists. The *All traffic* box makes a rule with
+  no lists take everything the rules above did not (limit it by an inbound tag: it also precedes the panel's own blocking rules). Domain rules
+  need the inbound to sniff the destination (the panel's inbounds do by default); a client that connects by address only is matched by address.
 - The page shows whether the last Xray configuration the panel built had the outbound, and why not if it did not.
 
 How it works: the plugin patches the Xray configuration on every build (the `pipeline:xray.config` permission) and never stores the result, so

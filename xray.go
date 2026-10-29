@@ -27,6 +27,9 @@ const (
 	xrayRuleTagPrefix = "lucx-warp-"
 	maxXrayRules      = 50
 	maxMatchers       = 200
+	actionWarp        = "warp"
+	actionDirect      = "direct"
+	directTag         = "direct" // the tag of the panel's own outbound that leaves the server as it is
 	defaultXrayTag    = "warp"
 	endpointTTL       = 10 * time.Minute
 )
@@ -39,10 +42,12 @@ type xraySet struct {
 	Rules    []xrayRule `json:"rules"`
 }
 
-// xrayRule sends what it matches through WARP. A request matches when it satisfies every list the rule has.
+// xrayRule sends what it matches through WARP, or around it. A request matches when it satisfies every list the rule has.
 type xrayRule struct {
 	Name     string   `json:"name"`
 	Enabled  bool     `json:"enabled"`
+	Action   string   `json:"action,omitempty"`   // "warp" (the default) or "direct": leave the server as it is, bypassing WARP
+	All      bool     `json:"all,omitempty"`      // matches all traffic that no earlier rule took; the lists then only narrow it
 	Domains  []string `json:"domains,omitempty"`  // Xray domain matchers: geosite:openai, domain:example.com, full:, keyword:, regexp:
 	IPs      []string `json:"ips,omitempty"`      // geoip:us, an address or a CIDR
 	Inbounds []string `json:"inbounds,omitempty"` // tags of the inbounds the traffic came in at
@@ -122,8 +127,15 @@ func (x *xraySet) normalize() error {
 		if r.Inbounds, err = cleanList(r.Inbounds, maxMatchers, xrayInboundPattern.MatchString, "inbound tag"); err != nil {
 			return fmt.Errorf("rule %d: %w", i+1, err)
 		}
-		if len(r.Domains)+len(r.IPs)+len(r.Inbounds) == 0 {
-			return fmt.Errorf("rule %d: name at least one domain, address or inbound", i+1)
+		switch r.Action {
+		case "":
+			r.Action = actionWarp
+		case actionWarp, actionDirect:
+		default:
+			return fmt.Errorf("rule %d: the action is warp or direct", i+1)
+		}
+		if len(r.Domains)+len(r.IPs)+len(r.Inbounds) == 0 && !r.All {
+			return fmt.Errorf("rule %d: name at least one domain, address or inbound, or take all traffic", i+1)
 		}
 		rules = append(rules, r)
 	}
@@ -248,7 +260,14 @@ func xrayRules(x xraySet) []any {
 		if !r.Enabled {
 			continue
 		}
-		rule := map[string]any{"type": "field", "ruleTag": fmt.Sprintf("%s%d", xrayRuleTagPrefix, i+1), "outboundTag": x.Tag}
+		tag := x.Tag
+		if r.Action == actionDirect {
+			tag = directTag
+		}
+		rule := map[string]any{"type": "field", "ruleTag": fmt.Sprintf("%s%d", xrayRuleTagPrefix, i+1), "outboundTag": tag}
+		if len(r.Domains)+len(r.IPs)+len(r.Inbounds) == 0 {
+			rule["network"] = "tcp,udp"
+		}
 		if len(r.Domains) > 0 {
 			rule["domain"] = r.Domains
 		}
@@ -299,14 +318,24 @@ func (a *app) xrayPatch(doc json.RawMessage) ([]PatchOp, error) {
 	}
 	var ops []PatchOp
 
-	have := false
+	have, haveDirect := false, false
 	for _, raw := range cfg.Outbounds {
 		var o struct {
 			Tag string `json:"tag"`
 		}
-		if json.Unmarshal(raw, &o) == nil && o.Tag == s.Xray.Tag {
-			have = true
+		if json.Unmarshal(raw, &o) == nil {
+			have = have || o.Tag == s.Xray.Tag
+			haveDirect = haveDirect || o.Tag == directTag
 		}
+	}
+	needDirect := false
+	for _, r := range s.Xray.Rules {
+		needDirect = needDirect || (r.Enabled && r.Action == actionDirect)
+	}
+	var add []any
+	if needDirect && !haveDirect {
+		// A rule that points at an outbound the configuration lacks stops Xray; the panel's usual one is a plain freedom.
+		add = append(add, map[string]any{"tag": directTag, "protocol": "freedom"})
 	}
 	if !have {
 		ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
@@ -317,10 +346,12 @@ func (a *app) xrayPatch(doc json.RawMessage) ([]PatchOp, error) {
 			a.noteXray(err.Error())
 			return nil, nil
 		}
-		ob := xrayOutbound(s, *d, ep)
-		if len(cfg.Outbounds) == 0 {
-			ops = append(ops, PatchOp{Op: "add", Path: "/outbounds", Value: []any{ob}})
-		} else {
+		add = append(add, xrayOutbound(s, *d, ep))
+	}
+	if len(cfg.Outbounds) == 0 && len(add) > 0 {
+		ops = append(ops, PatchOp{Op: "add", Path: "/outbounds", Value: add})
+	} else {
+		for _, ob := range add {
 			ops = append(ops, PatchOp{Op: "add", Path: "/outbounds/-", Value: ob})
 		}
 	}

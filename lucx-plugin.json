@@ -1,7 +1,7 @@
 {
   "id": "better-warp",
   "name": "Better WARP",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "apiVersion": "1",
   "description": "Cloudflare WARP over AmneziaWG as a protocol of the subscription: add a WARP inbound (panel build with it), attach clients, and each gets WARP nodes in the same four forms as an AmneziaWG node, with their own device, WARP+ license, and a check and endpoint scanner (Better Cores). Also gives this server's Xray a WARP outbound with routing rules (OpenAI, Netflix, a protocol by its inbound tag).",
   "author": "AllIsA1",
