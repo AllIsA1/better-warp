@@ -19,6 +19,8 @@ type app struct {
 	store *store
 	cf    *cfClient
 	prov  *provisioner
+	api   panelAPI
+	res   *endpointResolver
 	eng   engineAPI
 	lines *warpLines
 	now   func() time.Time
@@ -31,11 +33,13 @@ type app struct {
 	engErr   string
 	engAt    time.Time
 	scanning bool
+	xrayAt   time.Time // when the Xray configuration was last built with the outbound
+	xrayErr  string
 }
 
 func newApp(api panelAPI, st *store, cf *cfClient, eng engineAPI) *app {
 	prov := newProvisioner(api, st, cf)
-	return &app{store: st, cf: cf, prov: prov, eng: eng, lines: &warpLines{store: st, roster: prov.roster}, now: time.Now}
+	return &app{store: st, cf: cf, prov: prov, api: api, res: newResolver(), eng: eng, lines: &warpLines{store: st, roster: prov.roster}, now: time.Now}
 }
 
 var (

@@ -31,6 +31,7 @@ type settings struct {
 	Preset    string   `json:"preset"` // standard, light, strong or custom
 	AWG       awgSet   `json:"awg"`
 	AutoScan  autoScan `json:"autoScan"`
+	Xray      xraySet  `json:"xray"` // WARP as an outbound of the server's own Xray
 }
 
 // awgSet is the AmneziaWG part of a config.
@@ -76,7 +77,7 @@ func defaultSettings() settings {
 	return settings{
 		Mode: "perClient", Scope: "all", Name: defaultName, Endpoints: []string{defaultEndpoint},
 		MTU: 1280, DNS: defaultDNS, IPv6: true, Keepalive: 25, Preset: "standard", AWG: presets["standard"],
-		AutoScan: autoScan{Hours: 24, Count: 1},
+		AutoScan: autoScan{Hours: 24, Count: 1}, Xray: defaultXray(),
 	}
 }
 
@@ -198,7 +199,7 @@ func (s *settings) normalize() error {
 		return errors.New("auto scan: every 1-168 hours, keep 1-3 endpoints")
 	}
 	s.AutoScan = a
-	return nil
+	return s.Xray.normalize()
 }
 
 func (a awgSet) validate() error {

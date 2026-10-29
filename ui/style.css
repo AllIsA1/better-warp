@@ -242,3 +242,18 @@ pre {
 .advanced[hidden] {
   display: none;
 }
+
+.rule {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.rule textarea {
+  min-height: 56px;
+}
+
+.rule.off {
+  opacity: 0.6;
+}

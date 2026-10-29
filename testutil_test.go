@@ -23,6 +23,7 @@ type fakePanel struct {
 	rows     []clientRow
 	err      error
 	inbounds []map[string]any // the panel's inbound list; nil makes the call fail as an old permission set would
+	restarts int
 }
 
 func (f *fakePanel) Do(_ context.Context, method, path string, _, out any) error {
@@ -30,6 +31,10 @@ func (f *fakePanel) Do(_ context.Context, method, path string, _, out any) error
 	defer f.mu.Unlock()
 	if f.err != nil {
 		return f.err
+	}
+	if method == http.MethodPost && path == "/server/restartXrayService" {
+		f.restarts++
+		return nil
 	}
 	if method == http.MethodGet && path == "/inbounds/list" {
 		if f.inbounds == nil {
@@ -107,6 +112,7 @@ func (f *fakeCloudflare) serve(w http.ResponseWriter, r *http.Request) {
 			"id": fmt.Sprintf("dev-%d-aaaaaaaa", n), "token": fmt.Sprintf("tok-%d-secret", n),
 			"account": map[string]any{"license": fmt.Sprintf("lic-%d", n)},
 			"config": map[string]any{
+				"client_id": "AQID",
 				"peers":     []any{map[string]any{"public_key": testPeerKey, "endpoint": map[string]any{"host": "engage.cloudflareclient.com:2408"}}},
 				"interface": map[string]any{"addresses": map[string]any{"v4": fmt.Sprintf("172.16.0.%d", n+1), "v6": fmt.Sprintf("2606:4700:110:8a36:df92:102a:9602:%x", n)}},
 			},

@@ -27,7 +27,8 @@ type stateFile struct {
 	Version  int                `json:"version"`
 	Settings settings           `json:"settings"`
 	Main     *device            `json:"main,omitempty"`
-	Devices  map[string]*device `json:"devices"` // by subscription id
+	Server   *device            `json:"server,omitempty"` // the device of the server's own Xray outbound
+	Devices  map[string]*device `json:"devices"`          // by subscription id
 	LastScan *scanRecord        `json:"lastScan,omitempty"`
 }
 
@@ -90,6 +91,7 @@ func (s *store) settings() settings {
 	out := s.st.Settings
 	out.Selected = append([]string(nil), out.Selected...)
 	out.Endpoints = append([]string(nil), out.Endpoints...)
+	out.Xray.Rules = append([]xrayRule(nil), out.Xray.Rules...)
 	return out
 }
 
@@ -112,6 +114,7 @@ func (s *store) update(fn func(*settings) error) (settings, error) {
 	next := s.st.Settings
 	next.Selected = append([]string(nil), next.Selected...)
 	next.Endpoints = append([]string(nil), next.Endpoints...)
+	next.Xray.Rules = append([]xrayRule(nil), next.Xray.Rules...)
 	if err := fn(&next); err != nil {
 		return settings{}, err
 	}
@@ -140,6 +143,24 @@ func (s *store) setMain(d *device) error {
 	s.st.Main = d
 	if err := s.saveLocked(); err != nil {
 		s.st.Main = prev
+		return err
+	}
+	return nil
+}
+
+func (s *store) server() *device {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.st.Server
+}
+
+func (s *store) setServer(d *device) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	prev := s.st.Server
+	s.st.Server = d
+	if err := s.saveLocked(); err != nil {
+		s.st.Server = prev
 		return err
 	}
 	return nil

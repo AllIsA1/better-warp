@@ -56,6 +56,9 @@ func TestOnlyTheAdministratorChangesAnything(t *testing.T) {
 		{"POST", "/scan", `{}`},
 		{"POST", "/endpoints", `{"endpoints":["162.159.192.1:2408"]}`},
 		{"DELETE", "/jobs/x", ``},
+		{"POST", "/xray", `{"enabled":true}`},
+		{"POST", "/xray/server/delete", ``},
+		{"POST", "/xray/restart", ``},
 	} {
 		if code, _ := a.call(t, c.method, c.path, c.body, false); code != http.StatusForbidden {
 			t.Errorf("%s %s without an administrator: %d, want 403", c.method, c.path, code)

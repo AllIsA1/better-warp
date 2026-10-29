@@ -66,6 +66,9 @@ func newMux(a *app) http.Handler {
 	inner.HandleFunc("POST /check", a.handleCheck)
 	inner.HandleFunc("POST /scan", a.handleScan)
 	inner.HandleFunc("POST /endpoints", a.handleEndpoints)
+	inner.HandleFunc("POST /xray", a.handleXray)
+	inner.HandleFunc("POST /xray/server/delete", a.handleXrayDeleteServer)
+	inner.HandleFunc("POST /xray/restart", a.handleXrayRestart)
 	inner.HandleFunc("GET /jobs/{id}", a.handleJob)
 	inner.HandleFunc("DELETE /jobs/{id}", a.handleStopJob)
 
@@ -73,6 +76,7 @@ func newMux(a *app) http.Handler {
 	mux.Handle("POST /_lucx/seam/{mode}", SeamHandler(func(call SeamCall) (SeamReply, error) {
 		return subscriptionSeam(call, a.lines)
 	}))
+	mux.Handle("POST /_lucx/pipeline/xray.config", PipelineHandler(a.xrayPatch))
 	mux.Handle("/api/", http.StripPrefix("/api", inner))
 	mux.Handle("/ui/", pageHandler())
 	return mux
@@ -132,6 +136,7 @@ type stateView struct {
 	} `json:"engine"`
 	LastScan *scanRecord `json:"lastScan,omitempty"`
 	Scanning bool        `json:"scanning"`
+	Xray     xrayView    `json:"xray"`
 }
 
 func tp(t time.Time) *time.Time {
@@ -177,6 +182,7 @@ func (a *app) state(ctx context.Context) stateView {
 	a.mu.Lock()
 	v.Scanning = a.scanning
 	a.mu.Unlock()
+	v.Xray = a.xrayView(v.Settings)
 	return v
 }
 
@@ -223,9 +229,10 @@ func (a *app) handleSettings(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	// The scope list and the scan schedule's bookkeeping are not the form's to change here.
+	// The scope list and the Xray outbound (it has its own call) are not the form's to change here.
 	cur, err := a.store.update(func(s *settings) error {
 		in.Selected = s.Selected
+		in.Xray = s.Xray
 		*s = in
 		return nil
 	})
@@ -235,6 +242,40 @@ func (a *app) handleSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	a.prov.kick()
 	writeJSON(w, http.StatusOK, cur)
+}
+
+func (a *app) handleXray(w http.ResponseWriter, r *http.Request) {
+	if !admin(w, r) {
+		return
+	}
+	var in xraySet
+	if !decode(w, r, &in) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 40*time.Second)
+	defer cancel()
+	out, err := a.setXray(ctx, in)
+	if err != nil {
+		fail(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (a *app) handleXrayDeleteServer(w http.ResponseWriter, r *http.Request) {
+	if !admin(w, r) {
+		return
+	}
+	a.answer(w, a.deleteServerDevice(r.Context()))
+}
+
+func (a *app) handleXrayRestart(w http.ResponseWriter, r *http.Request) {
+	if !admin(w, r) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	a.answer(w, a.restartXray(ctx))
 }
 
 // handlePreview shows what a subscriber would get under the current settings, with the key hidden.

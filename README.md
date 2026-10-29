@@ -20,6 +20,36 @@ on one, and writes the lines. The WARP page then keeps the account (WARP+), the 
 **With no WARP inbound** (or on a panel without the protocol, or if the permission is missing) the plugin works as before from its own page, as
 described below.
 
+## WARP as an outbound of this server's Xray
+
+The other direction (1.2.0): **Xray on this server gets an outbound that leaves through WARP**, and routing rules decide what goes into it. This
+is what 3x-ui panels call "WARP routing": OpenAI, Netflix or Spotify through WARP, or the whole traffic of a protocol.
+
+On the plugin's page, *WARP for this server's Xray*:
+
+- **Give Xray the WARP outbound** registers a WARP device **of the server's own** (never the main account's: two tunnels with one key would
+  fight at Cloudflare) and adds an outbound `warp` (tag changeable) to the Xray configuration. It is Xray's own `wireguard` outbound with
+  the device's keys and, when Cloudflare gave one, its `reserved` bytes. The junk packets of AmneziaWG are for the clients' side and are not
+  part of it. MTU, IPv6 and keepalive are those of *Connection*; the endpoint is the first one there (so a scan helps this too), unless
+  you name one.
+- **Rules** are what goes into it. Each rule has lists of domains (`geosite:openai`, `domain:example.com`, …), addresses (`geoip:us`, CIDR) and
+  inbound tags; a request matches when it satisfies every list the rule has. Name an **inbound tag** (the one Inbounds shows, e.g. `inbound-443`) to
+  send everything that protocol carries through WARP. Presets add the usual geosites. The rules are placed ahead of the panel's own, after its
+  API rule.
+- The page shows whether the last Xray configuration the panel built had the outbound, and why not if it did not.
+
+How it works: the plugin patches the Xray configuration on every build (the `pipeline:xray.config` permission) and never stores the result, so
+**switching the plugin off removes the outbound and the rules**. Xray reads its configuration when it starts, so a saved change applies after
+*Restart Xray* (the button uses `api:server:write`; it restarts only when you press it, and open connections drop).
+
+Safety: Xray refuses to start with an outbound it cannot resolve, so the plugin writes the endpoint as an **address** it looked up itself
+(kept ten minutes, the last good one used if a lookup fails) and **leaves the outbound out** rather than write one Xray cannot start with. A
+`geosite:`/`geoip:` name that the panel's data files do not have makes Xray refuse the configuration, as it does in the panel's own Routing page.
+The outbound's tag cannot be `direct`, `blocked`, `api` or `proxy`.
+
+Not in this version: the stock tag pickers of other protocols' forms ("Route through Xray → Outbound") list the panel's own outbounds and do not
+show `warp`; use a rule with that protocol's inbound tag instead.
+
 ## What a subscriber gets
 
 For each endpoint (one to three) the subscription carries one node, as three lines in the order the subscription page groups them:
@@ -81,6 +111,8 @@ plugin's CPU limit, so the speed it reports on a fast link is a floor.
 | `network` (dangerous) | Cloudflare's registration API (`api.cloudflareclient.com`), nothing else |
 | `ui:menu` | the WARP page in the sidebar |
 | `peer:better-cores` (dangerous) | to call the WARP engine of Better Cores; Better Cores offers it nothing else |
+| `pipeline:xray.config` (dangerous) | 1.2.0: to add the WARP outbound and its rules to the Xray configuration (nothing else is touched) |
+| `api:server:write` (dangerous) | 1.2.0: the *Restart Xray* button; it calls `/server/restartXrayService` only when pressed |
 
 `peer:<id>` is new in the plugin system **host-9**: a plugin that lists another in `requires` may call that plugin's `/peer/…` paths through
 the gateway. An older host refuses to install the plugin. If Better Cores is missing, off, or too old, the page says so; the subscription lines
@@ -88,8 +120,8 @@ still work, only the check and the scanner do not.
 
 ## Data
 
-`state.json` in the plugin's data directory holds the settings and every device's private key and Cloudflare token (mode 0600). Back it up
-with the panel, and move it when the panel moves. A device's key is in the subscriber's config by design.
+`state.json` in the plugin's data directory holds the settings and every device's private key (the server's too) and Cloudflare token (mode 0600). Back it up
+with the panel, and move it when the panel moves. A device's key is in the subscriber's config by design; the server device's key is in the Xray configuration the panel generates.
 
 ## Build
 

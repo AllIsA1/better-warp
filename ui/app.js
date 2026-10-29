@@ -116,6 +116,39 @@
       selectNote: 'Switch “Who gets it” to “Only the selected” to choose.',
       preview: 'What a subscriber gets',
       previewNote: 'The first form is the config; the subscription also carries the same node as vpn:// and amneziawg://. Keys are the subscriber’s own.',
+      xrayTitle: 'WARP for this server’s Xray',
+      xrayIntro:
+        'The other direction: Xray on this server gets an outbound that leaves through WARP, and the rules below send what they match into it, for example OpenAI or Netflix, or the whole traffic of a protocol by its inbound tag. This server gets a WARP device of its own for it. The outbound is added to the Xray configuration while the plugin is on; switching the plugin off removes it.',
+      xrayEnabled: 'Give Xray the WARP outbound',
+      xrayTag: 'Outbound tag',
+      xrayEndpoint: 'Endpoint',
+      xrayEndpointHint: function (e) { return 'Empty: ' + e + ' (the first endpoint of the connection, so a scan helps here too). A name is turned into an address by the plugin.'; },
+      xrayDevice: 'Server device',
+      xrayNoDevice: 'none yet (registered when you save with the outbound on)',
+      xrayBuilt: function (t) { return 'Included in the Xray configuration built ' + t; },
+      xrayNotBuilt: 'Not in a built Xray configuration yet: restart Xray.',
+      xrayProblem: function (e) { return 'Left out of the last configuration: ' + e; },
+      xrayRules: 'Routing rules',
+      xrayRulesHint: 'A request goes through WARP when it satisfies every list a rule has. The rules are checked ahead of the panel’s own, after its API rule.',
+      xrayRuleName: 'Name',
+      xrayRuleOn: 'on',
+      xrayDomains: 'Domains (one per line)',
+      xrayDomainsHint: 'geosite:openai, domain:example.com, full:www.example.com, keyword:…, regexp:…',
+      xrayIPs: 'Addresses (one per line)',
+      xrayIPsHint: 'geoip:us, 1.1.1.0/24, 2606:4700::1111',
+      xrayInbounds: 'Inbound tags (one per line)',
+      xrayInboundsHint: 'The tag an inbound has in Inbounds, e.g. inbound-443: all its traffic.',
+      xrayAddRule: 'Add rule',
+      xrayPreset: 'Add: ',
+      xrayRemoveRule: 'Remove',
+      xrayNewRule: 'New rule',
+      xraySave: 'Save',
+      xrayRestart: 'Restart Xray',
+      xrayRestartNote: 'Xray reads its configuration when it starts: saved changes apply after a restart (open connections drop).',
+      xrayConfirmRestart: 'Restart Xray now? Open connections of all inbounds drop for a moment.',
+      xrayRestarted: 'Xray is restarting.',
+      xrayDeleteDevice: 'Delete the server device',
+      xrayConfirmDelete: 'Delete the server’s WARP device at Cloudflare and switch the outbound off?',
       failed: function (e) { return 'Failed: ' + e; },
       yes: 'yes',
       no: 'no',
@@ -233,6 +266,39 @@
       selectNote: 'Чтобы выбирать, поставьте «Кому выдавать»: «Только выбранным».',
       preview: 'Что получит подписчик',
       previewNote: 'Конфиг показан первым; в подписке тот же узел есть и как vpn://, и как amneziawg://. Ключи — собственные для каждого подписчика.',
+      xrayTitle: 'WARP для Xray этого сервера',
+      xrayIntro:
+        'Обратное направление: у Xray на этом сервере появляется outbound, выходящий через WARP, а правила ниже отправляют в него то, что подошло, например OpenAI или Netflix, либо весь трафик протокола по тегу его inbound. Для этого серверу выдаётся своё устройство WARP. Outbound добавляется в конфигурацию Xray, пока плагин включён; выключите плагин, и он исчезнет.',
+      xrayEnabled: 'Дать Xray outbound WARP',
+      xrayTag: 'Тег outbound',
+      xrayEndpoint: 'Endpoint',
+      xrayEndpointHint: function (e) { return 'Пусто: ' + e + ' (первый endpoint подключения, так что сканер полезен и здесь). Имя плагин превращает в адрес сам.'; },
+      xrayDevice: 'Устройство сервера',
+      xrayNoDevice: 'пока нет (регистрируется при сохранении с включённым outbound)',
+      xrayBuilt: function (t) { return 'Вошёл в конфигурацию Xray, собранную ' + t; },
+      xrayNotBuilt: 'В собранную конфигурацию Xray ещё не входил: перезапустите Xray.',
+      xrayProblem: function (e) { return 'В последнюю конфигурацию не попал: ' + e; },
+      xrayRules: 'Правила маршрутизации',
+      xrayRulesHint: 'Запрос идёт через WARP, если подходит под все списки правила. Правила стоят перед правилами панели, но после её правила API.',
+      xrayRuleName: 'Название',
+      xrayRuleOn: 'вкл',
+      xrayDomains: 'Домены (по одному в строке)',
+      xrayDomainsHint: 'geosite:openai, domain:example.com, full:www.example.com, keyword:…, regexp:…',
+      xrayIPs: 'Адреса (по одному в строке)',
+      xrayIPsHint: 'geoip:us, 1.1.1.0/24, 2606:4700::1111',
+      xrayInbounds: 'Теги inbound (по одному в строке)',
+      xrayInboundsHint: 'Тег inbound из раздела Inbounds, например inbound-443: весь его трафик.',
+      xrayAddRule: 'Добавить правило',
+      xrayPreset: 'Добавить: ',
+      xrayRemoveRule: 'Удалить',
+      xrayNewRule: 'Новое правило',
+      xraySave: 'Сохранить',
+      xrayRestart: 'Перезапустить Xray',
+      xrayRestartNote: 'Xray читает конфигурацию при запуске: сохранённое применится после перезапуска (открытые соединения оборвутся).',
+      xrayConfirmRestart: 'Перезапустить Xray сейчас? Открытые соединения всех inbound ненадолго оборвутся.',
+      xrayRestarted: 'Xray перезапускается.',
+      xrayDeleteDevice: 'Удалить устройство сервера',
+      xrayConfirmDelete: 'Удалить устройство WARP сервера в Cloudflare и выключить outbound?',
       failed: function (e) { return 'Ошибка: ' + e; },
       yes: 'да',
       no: 'нет',
@@ -454,6 +520,84 @@
     );
   }
 
+  // ---- WARP as an outbound of the server's Xray -------------------------------------------------
+
+  var XRAY_PRESETS = [
+    ['OpenAI', { domains: ['geosite:openai'] }],
+    ['Netflix', { domains: ['geosite:netflix'] }],
+    ['Spotify', { domains: ['geosite:spotify'] }],
+    ['Google', { domains: ['geosite:google'] }],
+  ];
+
+  function lines(text) { return text.split('\n').map(function (x) { return x.trim(); }).filter(Boolean); }
+
+  function xrayDraft() {
+    var d = editable();
+    if (!d.xray) d.xray = { enabled: false, tag: 'warp', endpoint: '', rules: [] };
+    if (!d.xray.rules) d.xray.rules = [];
+    return d.xray;
+  }
+
+  function saveXray(extra) {
+    var x = xrayDraft(), t = T();
+    var body = JSON.parse(JSON.stringify(x));
+    Object.keys(extra || {}).forEach(function (k) { body[k] = extra[k]; });
+    return act(function () { return api('/xray', 'POST', body); }, t.saved).then(function (r) {
+      if (r) { draft = null; }
+      return load();
+    });
+  }
+
+  function ruleEditor(rule, i) {
+    var t = T(), x = xrayDraft();
+    function list(label, key, hint, mono) {
+      return field(label, h('textarea', { rows: 3, spellcheck: 'false', value: (rule[key] || []).join('\n'), onchange: function (e) { rule[key] = lines(e.target.value); } }), hint);
+    }
+    return h('div', { class: 'rule' + (rule.enabled ? '' : ' off') }, [
+      h('div', { class: 'row' }, [
+        check(t.xrayRuleOn, rule.enabled, function (v) { rule.enabled = v; }),
+        h('input', { type: 'text', maxlength: 60, placeholder: t.xrayRuleName, value: rule.name || '', onchange: function (e) { rule.name = e.target.value; } }),
+        h('button', { class: 'danger', text: t.xrayRemoveRule, onclick: function () { x.rules.splice(i, 1); secXray(); } }),
+      ]),
+      h('div', { class: 'grid' }, [
+        list(t.xrayDomains, 'domains', t.xrayDomainsHint),
+        list(t.xrayIPs, 'ips', t.xrayIPsHint),
+        list(t.xrayInbounds, 'inbounds', t.xrayInboundsHint),
+      ]),
+    ]);
+  }
+
+  function secXray() {
+    var t = T(), el = document.getElementById('secXray');
+    if (!state || !state.xray) return;
+    var v = state.xray, x = xrayDraft();
+    var out = [h('h2', { text: t.xrayTitle }), h('p', { class: 'muted small', text: t.xrayIntro })];
+    out.push(h('div', { class: 'row' }, [
+      check(t.xrayEnabled, x.enabled, function (c) { x.enabled = c; }),
+      field(t.xrayTag, h('input', { type: 'text', class: 'mono', maxlength: 32, value: x.tag || 'warp', onchange: function (e) { x.tag = e.target.value; } })),
+      field(t.xrayEndpoint, h('input', { type: 'text', class: 'mono', placeholder: v.endpoint, value: x.endpoint || '', onchange: function (e) { x.endpoint = e.target.value; } }), t.xrayEndpointHint(v.endpoint)),
+    ]));
+    var status = [chip(t.xrayDevice + ': ' + (v.registered ? v.deviceId : t.xrayNoDevice), v.registered ? 'good' : '')];
+    if (v.problem) status.push(chip(t.xrayProblem(v.problem), 'bad'));
+    else if (v.enabled) status.push(chip(v.builtAt ? t.xrayBuilt(fmtTime(v.builtAt)) : t.xrayNotBuilt, v.builtAt ? 'good' : 'warn'));
+    out.push(h('div', { class: 'row' }, status));
+
+    out.push(h('h3', { text: t.xrayRules }), h('p', { class: 'muted small', text: t.xrayRulesHint }));
+    x.rules.forEach(function (r, i) { out.push(ruleEditor(r, i)); });
+    var adders = [h('button', { text: t.xrayAddRule, onclick: function () { x.rules.push({ name: t.xrayNewRule, enabled: true, domains: [], ips: [], inbounds: [] }); secXray(); } }), h('span', { class: 'muted small', text: t.xrayPreset })];
+    XRAY_PRESETS.forEach(function (p) {
+      adders.push(h('button', { text: p[0], onclick: function () { x.rules.push({ name: p[0], enabled: true, domains: p[1].domains.slice(), ips: [], inbounds: [] }); secXray(); } }));
+    });
+    out.push(h('div', { class: 'row' }, adders));
+    out.push(h('div', { class: 'row' }, [
+      h('button', { class: 'primary', text: t.xraySave, onclick: function () { saveXray(); } }),
+      h('button', { text: t.xrayRestart, onclick: function () { if (confirm(t.xrayConfirmRestart)) act(function () { return api('/xray/restart', 'POST'); }, t.xrayRestarted); } }),
+      v.registered ? h('button', { class: 'danger', text: t.xrayDeleteDevice, onclick: function () { if (confirm(t.xrayConfirmDelete)) act(function () { return api('/xray/server/delete', 'POST'); }).then(function () { draft = null; load(); }); } }) : null,
+    ]));
+    out.push(h('p', { class: 'muted small', text: t.xrayRestartNote }));
+    el.replaceChildren.apply(el, out);
+  }
+
   function progressBar(job) {
     var t = T(), pct = job.total ? Math.round((100 * job.done) / job.total) : 0;
     var bar = h('i', {});
@@ -619,7 +763,7 @@
     var banner = document.getElementById('engineBanner');
     banner.hidden = state.engine.ok;
     banner.textContent = state.engine.ok ? '' : t.engineMissing(state.engine.error || '');
-    secProtocol(); secAccount(); secSettings(); secEndpoints(); secSubs();
+    secProtocol(); secAccount(); secSettings(); secEndpoints(); secXray(); secSubs();
   }
 
   function loadSubs() {

@@ -30,9 +30,10 @@ type device struct {
 	PeerKey    string    `json:"peerKey"`
 	V4         string    `json:"v4"`
 	V6         string    `json:"v6"`
-	Host       string    `json:"host,omitempty"`    // the endpoint Cloudflare names for the device
-	License    string    `json:"license,omitempty"` // the account's own key, from the registration
-	PlusKey    string    `json:"plusKey,omitempty"` // a WARP+ key the operator applied
+	Host       string    `json:"host,omitempty"`     // the endpoint Cloudflare names for the device
+	License    string    `json:"license,omitempty"`  // the account's own key, from the registration
+	PlusKey    string    `json:"plusKey,omitempty"`  // a WARP+ key the operator applied
+	ClientID   string    `json:"clientId,omitempty"` // base64 of the three "reserved" bytes Xray puts in its packets
 	Created    time.Time `json:"created"`
 }
 
@@ -100,7 +101,8 @@ type regResponse struct {
 		License string `json:"license"`
 	} `json:"account"`
 	Config struct {
-		Peers []struct {
+		ClientID string `json:"client_id"`
+		Peers    []struct {
 			PublicKey string `json:"public_key"`
 			Endpoint  struct {
 				Host string `json:"host"`
@@ -137,7 +139,7 @@ func (r regResponse) toDevice(priv string, now time.Time) (device, error) {
 	}
 	return device{
 		ID: r.ID, Token: r.Token, PrivateKey: priv, PeerKey: strings.TrimSpace(r.Config.Peers[0].PublicKey),
-		V4: v4.String(), V6: v6.String(), Host: host, License: strings.TrimSpace(r.Account.License), Created: now,
+		V4: v4.String(), V6: v6.String(), Host: host, License: strings.TrimSpace(r.Account.License), ClientID: strings.TrimSpace(r.Config.ClientID), Created: now,
 	}, nil
 }
 
